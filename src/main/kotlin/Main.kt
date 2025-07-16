@@ -137,7 +137,7 @@ fun main(args: Array<String>) {
                                 // if the element is not in the queue, add it
                                 val columnIdx: Int = i - begin
                                 if (!queues[index].contains(columnIdx)) {
-                                    queues[i].addFirst(columnIdx)
+                                    queues[index].addFirst(columnIdx)
                                 } else {
                                     queues[index].remove(columnIdx)
                                     queues[index].addFirst(columnIdx)
@@ -170,7 +170,7 @@ fun main(args: Array<String>) {
 
                     when (replacement) {
                         Replacement.R -> {
-                            val random = Random.nextInt(begin, end)
+                            val random = Random.nextInt(begin, end - 1)
                             cache_tag[random] = tag
                         }
 
@@ -217,13 +217,23 @@ fun main(args: Array<String>) {
     }
 
     println("Results:")
-    val misses = infos.comp + infos.cap + infos.con
-    val hitRate = infos.hit.toDouble()/infos.access.toDouble()
-    val missRate: Double = misses.toDouble()/infos.access.toDouble()
-    val missRateComp: Double = infos.comp.toDouble()/infos.access.toDouble()
-    val missRateCap: Double = infos.cap.toDouble()/infos.access.toDouble()
-    val missRateCon: Double = infos.con.toDouble()/infos.access.toDouble()
-    println("${infos.access} $hitRate $missRate $missRateComp $missRateCap $missRateCon")
+    val misses       = infos.comp + infos.cap + infos.con
+
+    val hitRate      = infos.hit   .toDouble() / infos.access
+    val missRate     = misses      .toDouble() / infos.access
+
+    val compFracMiss = infos.comp  .toDouble() / misses
+    val capFracMiss  = infos.cap   .toDouble() / misses
+    val conFracMiss  = infos.con   .toDouble() / misses
+
+    println(
+        "${infos.access} " +
+                "%.4f".format(hitRate) + " " +
+                "%.4f".format(missRate) + " " +
+                "%.4f".format(compFracMiss) + " " +
+                "%.4f".format(capFracMiss)  + " " +
+                "%.4f".format(conFracMiss)
+    )
 }
 
 fun parsingError(str: String): Nothing {
