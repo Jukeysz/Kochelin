@@ -1,4 +1,5 @@
 import jdk.internal.misc.Blocker.begin
+import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -73,6 +74,8 @@ fun main(args: Array<String>) {
     var queues: List<ArrayDeque<Int>> = List(nsets) { ArrayDeque<Int>() }
     val seenTags = mutableSetOf<Int>()
 
+    var size: Int = 0;
+
     val inputStream = ClassLoader.getSystemResourceAsStream(inArchive) ?: run {
         println("Error: could not open file $inArchive")
         exitProcess(1)
@@ -84,7 +87,7 @@ fun main(args: Array<String>) {
             val address = ByteBuffer.wrap(buffer)
                 .order(ByteOrder.BIG_ENDIAN)
                 .int
-
+            size++
             infos.access++
             val tag = address shr (nBitsOffset+nBitsIndex)
             val index = (address shr nBitsOffset) and ((1 shl nBitsIndex) - 1)
@@ -137,7 +140,7 @@ fun main(args: Array<String>) {
                                 // if the element is not in the queue, add it
                                 val columnIdx: Int = i - begin
                                 if (!queues[index].contains(columnIdx)) {
-                                    queues[i].addFirst(columnIdx)
+                                    queues[index].addFirst(columnIdx)
                                 } else {
                                     queues[index].remove(columnIdx)
                                     queues[index].addFirst(columnIdx)
