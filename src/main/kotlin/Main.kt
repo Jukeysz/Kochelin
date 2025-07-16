@@ -170,7 +170,7 @@ fun main(args: Array<String>) {
 
                     when (replacement) {
                         Replacement.R -> {
-                            val random = Random.nextInt(begin, end - 1)
+                            val random = Random.nextInt(begin, end)
                             cache_tag[random] = tag
                         }
 
