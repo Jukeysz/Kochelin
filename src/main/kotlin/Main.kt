@@ -71,7 +71,6 @@ fun main(args: Array<String>) {
     // one queue per entry
     // this queue stores the indices inside the entry range (the associativity column indices)
     var queues: List<ArrayDeque<Int>> = List(nsets) { ArrayDeque<Int>() }
-    val seenTags = mutableSetOf<Int>()
 
     val inputStream = ClassLoader.getSystemResourceAsStream(inArchive) ?: run {
         println("Error: could not open file $inArchive")
@@ -88,18 +87,22 @@ fun main(args: Array<String>) {
             infos.access++
             val tag = address shr (nBitsOffset+nBitsIndex)
             val index = (address shr nBitsOffset) and ((1 shl nBitsIndex) - 1)
-            val isFirstAccess = tag !in seenTags
-            if (isFirstAccess) seenTags.add(tag)
 
             when {
                 // DIRECT MAPPING
                 assoc == 1 -> {
-                    if (cache_val[index] && cache_tag[index] == tag) {
-                        infos.hit++
-                    } else {
-                        if (isFirstAccess) infos.comp++ else infos.con++
+                    if (!cache_val[index]) {
+                        infos.comp++
                         cache_val[index] = true
                         cache_tag[index] = tag
+                    } else {
+                        if (cache_tag[index] == tag) {
+                            infos.hit++
+                        } else {
+                            infos.con++
+                            cache_tag[index] = tag
+                            cache_val[index] = true
+                        }
                     }
                 }
 
@@ -123,40 +126,46 @@ fun main(args: Array<String>) {
                     // The difference between LRU and FIFO is that LRU pushes the hit elem to the
                     // front of the queue
 
+                    // CHECK HIT
                     for (i in begin until end) {
                         if (cache_val[i] && cache_tag[i] == tag) {
                             infos.hit++
+
                             if (replacement == Replacement.LRU) {
-                                val col = i - begin
-                                queues[index].remove(col)
-                                queues[index].addLast(col)
+                                // if the element is not in the queue, add it
+                                val columnIdx: Int = i - begin
+                                if (!queues[index].contains(columnIdx)) {
+                                    queues[index].addFirst(columnIdx)
+                                } else {
+                                    queues[index].remove(columnIdx)
+                                    queues[index].addFirst(columnIdx)
+                                }
                             }
                             continue@readLoop
                         }
                     }
-                    // Miss
-                    if (isFirstAccess) {
-                        infos.comp++
-                    } else if(hasSetCapacity(cache_val, begin, end)) {
-                        infos.con++
-                    } else {
-                        infos.cap++
-                    }
 
-                    // try to replace in empty slot
+                    // CHECK IF COMPULSORY
                     for (i in begin until end) {
-                        val col = i - begin
+                        val columnIdx: Int = i - begin
                         if (!cache_val[i]) {
+                            infos.comp++
                             cache_val[i] = true
                             cache_tag[i] = tag
-                            if (replacement == Replacement.F || replacement == Replacement.LRU) {
-                                queues[index].addLast(col)
+                            when (replacement) {
+                                Replacement.F, Replacement.LRU -> {
+                                    queues[index].add(columnIdx)
+                                }
+
+                                else -> {}
                             }
                             continue@readLoop
                         }
                     }
 
-                    // no empty lot
+                    // treat the capacity or conflict MISS
+                    if (hasSetCapacity(cache_val, begin, end)) infos.con++ else infos.cap++
+
                     when (replacement) {
                         Replacement.R -> {
                             val random = Random.nextInt(begin, end)
@@ -168,41 +177,36 @@ fun main(args: Array<String>) {
                             // and use it as index for cache_tag, then replace it treating the fault.
                             // Right away we remove the last element and put it in the front
                             // so the queue always has the same size
-                            val col = queues[index].removeFirst()
-                            cache_tag[begin + col] = tag
-                            queues[index].addLast(col)
+                            cache_tag[queues[index].last()] = tag
+                            queues[index].add(queues[index].removeLast())
                         }
                     }
                 }
 
                 // TOTALLY ASSOCIATIVE
                 nsets.toInt() == 1 -> {
-                    for (i in 0 until assoc) {
-                        if (cache_val[i] && cache_tag[i] == tag) {
-                            infos.hit++
-                            continue@readLoop
-                        }
-                    }
-
-                    if (isFirstAccess) infos.comp++
-                    else if (hasCapacity(cache_val)) infos.con++
-                    else infos.cap++
-
-                    for (i in 0 until assoc) {
-                        if (!cache_val[i]) {
-                            cache_val[i] = true
-                            cache_tag[i] = tag
-                            continue@readLoop
-                        }
-                    }
                     when (replacement) {
                         Replacement.R -> {
-                            val random = Random.nextInt(0, assoc)
+                            for (entry in cache_tag) {
+                                if (entry == tag) {
+                                    infos.hit++
+                                    continue@readLoop
+                                }
+                            }
+                            if (hasCapacity(cache_val)) infos.con++ else infos.cap++
+                            val begin = index * assoc
+                            val end = (index + 1) * assoc
+                            val random = Random.nextInt(begin, end - 1)
                             cache_tag[random] = tag
+                            cache_val[random] = true
                         }
 
-                        Replacement.F, Replacement.LRU -> {
+                        Replacement.F -> {
+                            //TODO
+                        }
 
+                        Replacement.LRU -> {
+                            //TODO
                         }
                     }
                 }
@@ -211,13 +215,23 @@ fun main(args: Array<String>) {
     }
 
     println("Results:")
-    val misses = infos.comp + infos.cap + infos.con
-    val hitRate = infos.hit.toDouble()/infos.access.toDouble()
-    val missRate: Double = misses.toDouble()/infos.access.toDouble()
-    val missRateComp: Double = infos.comp.toDouble()/infos.access.toDouble()
-    val missRateCap: Double = infos.cap.toDouble()/infos.access.toDouble()
-    val missRateCon: Double = infos.con.toDouble()/infos.access.toDouble()
-    println("${infos.access} $hitRate $missRate $missRateComp $missRateCap $missRateCon")
+    val misses       = infos.comp + infos.cap + infos.con
+
+    val hitRate      = infos.hit   .toDouble() / infos.access
+    val missRate     = misses      .toDouble() / infos.access
+
+    val compFracMiss = infos.comp  .toDouble() / misses
+    val capFracMiss  = infos.cap   .toDouble() / misses
+    val conFracMiss  = infos.con   .toDouble() / misses
+
+    println(
+        "${infos.access} " +
+                "%.4f".format(hitRate) + " " +
+                "%.4f".format(missRate) + " " +
+                "%.4f".format(compFracMiss) + " " +
+                "%.4f".format(capFracMiss)  + " " +
+                "%.4f".format(conFracMiss)
+    )
 }
 
 fun parsingError(str: String): Nothing {
@@ -230,7 +244,7 @@ fun isPowerOfTwo(n: Int): Boolean {
 }
 
 fun hasCapacity(entries: List<Boolean>): Boolean {
-    return entries.any { !it }
+    return if(false in entries) true else false
 }
 
 fun hasSetCapacity(entries: List<Boolean>, begin: Int, end: Int): Boolean {
