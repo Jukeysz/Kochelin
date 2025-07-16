@@ -161,7 +161,7 @@ fun main(args: Array<String>) {
                             cache_tag[i] = tag
                             when (replacement) {
                                 Replacement.F, Replacement.LRU -> {
-                                    queues[index].add(columnIdx)
+                                    queues[index].addFirst(columnIdx)
                                 }
 
                                 else -> {}
@@ -171,7 +171,7 @@ fun main(args: Array<String>) {
                     }
 
                     // treat the capacity or conflict MISS
-                    if (hasSetCapacity(cache_val, begin, end)) infos.con++ else infos.cap++
+                    if (isCacheFull(cache_val)) infos.cap++ else infos.con++
 
                     when (replacement) {
                         Replacement.R -> {
@@ -184,8 +184,11 @@ fun main(args: Array<String>) {
                             // and use it as index for cache_tag, then replace it treating the fault.
                             // Right away we remove the last element and put it in the front
                             // so the queue always has the same size
-                            cache_tag[queues[index].last()] = tag
-                            queues[index].add(queues[index].removeLast())
+                            val lruColumnIdx = queues[index].removeLast()
+                            val lruIdx = begin + lruColumnIdx
+                            cache_tag[lruIdx] = tag
+                            cache_val[lruIdx] = true
+                            queues[index].addFirst(lruColumnIdx)
                         }
                     }
                 }
@@ -222,22 +225,20 @@ fun main(args: Array<String>) {
     }
 
     println("Results:")
-    val misses       = infos.comp + infos.cap + infos.con
-
-    val hitRate      = infos.hit   .toDouble() / infos.access
-    val missRate     = misses      .toDouble() / infos.access
-
-    val compFracMiss = infos.comp  .toDouble() / misses
-    val capFracMiss  = infos.cap   .toDouble() / misses
-    val conFracMiss  = infos.con   .toDouble() / misses
+    val misses = infos.comp + infos.cap + infos.con
+    val hitRate = infos.hit.toDouble() / infos.access
+    val missRate = misses.toDouble() / infos.access
+    val compFracMiss = infos.comp.toDouble() / misses
+    val capFracMiss = infos.cap.toDouble() / misses
+    val conFracMiss = infos.con.toDouble() / misses
 
     println(
         "${infos.access} " +
-                "%.4f".format(hitRate) + " " +
-                "%.4f".format(missRate) + " " +
-                "%.4f".format(compFracMiss) + " " +
-                "%.4f".format(capFracMiss)  + " " +
-                "%.4f".format(conFracMiss)
+        "%.4f".format(hitRate) + " " +
+        "%.4f".format(missRate) + " " +
+        "%.4f".format(compFracMiss) + " " +
+        "%.4f".format(capFracMiss)  + " " +
+        "%.4f".format(conFracMiss)
     )
 }
 
@@ -254,9 +255,6 @@ fun hasCapacity(entries: List<Boolean>): Boolean {
     return if (false in entries) false else true
 }
 
-fun hasSetCapacity(entries: List<Boolean>, begin: Int, end: Int): Boolean {
-    for (i in begin until end) {
-        if (!entries[i]) return true
-    }
-    return false
+fun isCacheFull(entries: List<Boolean>): Boolean {
+    return entries.all { it }
 }
