@@ -72,9 +72,7 @@ fun main(args: Array<String>) {
     // one queue per entry
     // this queue stores the indices inside the entry range (the associativity column indices)
     var queues: List<ArrayDeque<Int>> = List(nsets) { ArrayDeque<Int>() }
-    val seenTags = mutableSetOf<Int>()
-
-    var size: Int = 0;
+    val seenBlocks = mutableSetOf<Pair<Int, Int>>()
 
     val inputStream = ClassLoader.getSystemResourceAsStream(inArchive) ?: run {
         println("Error: could not open file $inArchive")
@@ -86,28 +84,32 @@ fun main(args: Array<String>) {
         readLoop@while (fis.read(buffer) == 4) {
             val address = ByteBuffer.wrap(buffer)
                 .order(ByteOrder.BIG_ENDIAN)
-                .int
-            size++
+                .int.toUInt().toInt()
             infos.access++
-            val tag = address shr (nBitsOffset+nBitsIndex)
-            val index = (address shr nBitsOffset) and ((1 shl nBitsIndex) - 1)
+            val tag = address ushr (nBitsOffset+nBitsIndex)
+            val index = (address ushr nBitsOffset) and ((1 shl nBitsIndex) - 1)
 
             when {
                 // DIRECT MAPPING
                 assoc == 1 -> {
-                    if (!cache_val[index]) {
+                    val blockKey    = tag to index
+                    val isFirstTime = seenBlocks.add(blockKey)
+
+                    if (cache_val[index] && cache_tag[index] == tag) {
+                        // HIT
+                        infos.hit++
+                    }
+                    else if (isFirstTime) {
+                        // FIRST‐TIME *BLOCK* EVER → COMPULSORY
                         infos.comp++
                         cache_val[index] = true
                         cache_tag[index] = tag
-                    } else {
-                        if (cache_tag[index] == tag) {
-                            infos.hit++
-                        } else {
-                            // consider or not the capacity misses (even though it does not make sense)
-                            infos.con++
-                            cache_val[index] = true
-                            cache_tag[index] = tag
-                        }
+                    }
+                    else {
+                        // SEEN THIS BLOCK BEFORE, but it was evicted → CONFLICT
+                        infos.con++
+                        cache_val[index] = true
+                        cache_tag[index] = tag
                     }
                 }
 
@@ -220,13 +222,23 @@ fun main(args: Array<String>) {
     }
 
     println("Results:")
-    val misses = infos.comp + infos.cap + infos.con
-    val hitRate = infos.hit.toDouble()/infos.access.toDouble()
-    val missRate: Double = misses.toDouble()/infos.access.toDouble()
-    val missRateComp: Double = infos.comp.toDouble()/infos.access.toDouble()
-    val missRateCap: Double = infos.cap.toDouble()/infos.access.toDouble()
-    val missRateCon: Double = infos.con.toDouble()/infos.access.toDouble()
-    println("${infos.access} $hitRate $missRate $missRateComp $missRateCap $missRateCon")
+    val misses       = infos.comp + infos.cap + infos.con
+
+    val hitRate      = infos.hit   .toDouble() / infos.access
+    val missRate     = misses      .toDouble() / infos.access
+
+    val compFracMiss = infos.comp  .toDouble() / misses
+    val capFracMiss  = infos.cap   .toDouble() / misses
+    val conFracMiss  = infos.con   .toDouble() / misses
+
+    println(
+        "${infos.access} " +
+                "%.4f".format(hitRate) + " " +
+                "%.4f".format(missRate) + " " +
+                "%.4f".format(compFracMiss) + " " +
+                "%.4f".format(capFracMiss)  + " " +
+                "%.4f".format(conFracMiss)
+    )
 }
 
 fun parsingError(str: String): Nothing {
@@ -239,7 +251,7 @@ fun isPowerOfTwo(n: Int): Boolean {
 }
 
 fun hasCapacity(entries: List<Boolean>): Boolean {
-    return if (true in entries) true else false
+    return if (false in entries) false else true
 }
 
 fun hasSetCapacity(entries: List<Boolean>, begin: Int, end: Int): Boolean {
