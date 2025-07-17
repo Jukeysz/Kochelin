@@ -72,7 +72,6 @@ fun main(args: Array<String>) {
     // one queue per entry
     // this queue stores the indices inside the entry range (the associativity column indices)
     var queues: List<ArrayDeque<Int>> = List(nsets) { ArrayDeque<Int>() }
-    val seenBlocks = mutableSetOf<Pair<Int, Int>>()
 
     val inputStream = ClassLoader.getSystemResourceAsStream(inArchive) ?: run {
         println("Error: could not open file $inArchive")
@@ -92,31 +91,25 @@ fun main(args: Array<String>) {
             when {
                 // DIRECT MAPPING
                 assoc == 1 -> {
-                    val blockKey    = tag to index
-                    val isFirstTime = seenBlocks.add(blockKey)
-
-                    if (cache_val[index] && cache_tag[index] == tag) {
-                        // HIT
-                        infos.hit++
-                    }
-                    else if (isFirstTime) {
-                        // FIRST‐TIME *BLOCK* EVER → COMPULSORY
+                    if (!cache_val[index]) {
                         infos.comp++
                         cache_val[index] = true
                         cache_tag[index] = tag
-                    }
-                    else {
-                        // SEEN THIS BLOCK BEFORE, but it was evicted → CONFLICT
-                        infos.con++
-                        cache_val[index] = true
-                        cache_tag[index] = tag
+                    } else {
+                        if (cache_tag[index] == tag) {
+                            infos.hit++
+                        } else {
+                            infos.con++
+                            cache_tag[index] = tag
+                            cache_val[index] = true
+                        }
                     }
                 }
 
                 // ASSOCIATIVITY
                 // With associativity, both cache_val and cache_tag are flattened matrices
                 // the columns represent the aggregated "blocks" into a single cache entry
-                assoc != 1 && nsets != 1 -> {
+                assoc > 1 -> {
                     // go through the range index * assoc until (index + 1) * assoc
                     val begin = index * assoc
                     val end = (index + 1) * assoc
@@ -189,34 +182,6 @@ fun main(args: Array<String>) {
                             cache_tag[lruIdx] = tag
                             cache_val[lruIdx] = true
                             queues[index].addFirst(lruColumnIdx)
-                        }
-                    }
-                }
-
-                // TOTALLY ASSOCIATIVE
-                nsets.toInt() == 1 -> {
-                    when (replacement) {
-                        Replacement.R -> {
-                            for (entry in cache_tag) {
-                                if (entry == tag) {
-                                    infos.hit++
-                                    continue@readLoop
-                                }
-                            }
-                            if (hasCapacity(cache_val)) infos.con++ else infos.cap++
-                            val begin = index * assoc
-                            val end = (index + 1) * assoc
-                            val random = Random.nextInt(begin, end - 1)
-                            cache_tag[random] = tag
-                            cache_val[random] = true
-                        }
-
-                        Replacement.F -> {
-                            //TODO
-                        }
-
-                        Replacement.LRU -> {
-                            //TODO
                         }
                     }
                 }
