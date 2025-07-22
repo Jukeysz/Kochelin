@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.1.21"
+    application
 }
 
 group = "org.example"
@@ -18,4 +19,9 @@ tasks.test {
 }
 kotlin {
     jvmToolchain(23)
+}
+
+application {
+    mainClass.set("MainKt")
+    applicationName = "cache_simulator"
 }

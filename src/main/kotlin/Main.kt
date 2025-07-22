@@ -14,7 +14,7 @@ import kotlin.system.exitProcess
 data class Info(var comp: Int = 0, var cap: Int = 0, var con: Int = 0,
                 var hit: Int = 0, var access: Int = 0)
 
-enum class Replacement {R, LRU, F}
+enum class Replacement {R, L, F}
 
 fun main(args: Array<String>) {
     if (args.size != 6) {
@@ -27,17 +27,25 @@ fun main(args: Array<String>) {
     val bsize = args[1].toIntOrNull() ?: parsingError(args[1])
     val assoc = args[2].toIntOrNull() ?: parsingError(args[2])
     val subst = args[3]
-    val flagOut = args[4].toIntOrNull() ?: parsingError(args[4])
+    val flag = when (args[4].toIntOrNull()) {
+        1 -> "true"
+        0 -> "false"
+        else -> null
+    }
+    val flagOut = flag?.toBooleanStrictOrNull() ?: parsingBoolError(args[4])
     val inArchive = args[5]
 
     var infos = Info()
 
-    println("nsets = $nsets")
-    println("bsize = $bsize")
-    println("assoc = $assoc")
-    println("subst = $subst")
-    println("flagOut = $flagOut")
-    println("inArchive = $inArchive")
+    if (!flagOut) {
+        println("nsets = $nsets")
+        println("bsize = $bsize")
+        println("assoc = $assoc")
+        println("subst = $subst")
+        println("flagOut = $flagOut")
+        println("inArchive = $inArchive")
+    }
+
 
     if (!isPowerOfTwo(nsets)) {
         println("Error: nsets ($nsets) must be a power of two")
@@ -59,7 +67,7 @@ fun main(args: Array<String>) {
     val nBitsTag = 32 - nBitsIndex - nBitsOffset
     val replacement = when (subst.uppercase()) {
         "R" -> Replacement.R
-        "LRU" -> Replacement.LRU
+        "L" -> Replacement.L
         "F" -> Replacement.F
         else -> {
             println("Error: subst($subst) must be a valid options (LRU, F or R")
@@ -131,7 +139,7 @@ fun main(args: Array<String>) {
                         if (cache_val[i] && cache_tag[i] == tag) {
                             infos.hit++
 
-                            if (replacement == Replacement.LRU) {
+                            if (replacement == Replacement.L) {
                                 // if the element is not in the queue, add it
                                 val columnIdx: Int = i - begin
                                 if (!queues[index].contains(columnIdx)) {
@@ -153,7 +161,7 @@ fun main(args: Array<String>) {
                             cache_val[i] = true
                             cache_tag[i] = tag
                             when (replacement) {
-                                Replacement.F, Replacement.LRU -> {
+                                Replacement.F, Replacement.L -> {
                                     queues[index].addFirst(columnIdx)
                                 }
 
@@ -172,7 +180,7 @@ fun main(args: Array<String>) {
                             cache_tag[random] = tag
                         }
 
-                        Replacement.F, Replacement.LRU -> {
+                        Replacement.F, Replacement.L -> {
                             // Takes the last element (the last used element from the hits) from the queue
                             // and use it as index for cache_tag, then replace it treating the fault.
                             // Right away we remove the last element and put it in the front
@@ -189,7 +197,6 @@ fun main(args: Array<String>) {
         }
     }
 
-    println("Results:")
     val misses = infos.comp + infos.cap + infos.con
     val hitRate = infos.hit.toDouble() / infos.access
     val missRate = misses.toDouble() / infos.access
@@ -197,14 +204,28 @@ fun main(args: Array<String>) {
     val capFracMiss = infos.cap.toDouble() / misses
     val conFracMiss = infos.con.toDouble() / misses
 
-    println(
-        "${infos.access} " +
-        "%.4f".format(hitRate) + " " +
-        "%.4f".format(missRate) + " " +
-        "%.4f".format(compFracMiss) + " " +
-        "%.4f".format(capFracMiss)  + " " +
-        "%.4f".format(conFracMiss)
-    )
+    if (flagOut) {
+        println(
+            "${infos.access} " +
+                    "%.4f".format(hitRate) + " " +
+                    "%.4f".format(missRate) + " " +
+                    "%.4f".format(compFracMiss) + " " +
+                    "%.4f".format(capFracMiss)  + " " +
+                    "%.4f".format(conFracMiss)
+        )
+    } else {
+        println("Accesses: ${infos.access}")
+        println("Hit rate: %.2f%%".format(hitRate * 100))
+        println("Miss rate: %.2f%%".format(missRate * 100))
+        println("Compulsory miss rate: %.2f%%".format(compFracMiss * 100))
+        println("Capacity miss rate: %.2f%%".format(capFracMiss * 100))
+        println("Conflict miss rate: %.2f%%".format(conFracMiss * 100))
+    }
+}
+
+fun parsingBoolError(str: String): Nothing {
+    println("$str must be either 0 or 1")
+    exitProcess(1)
 }
 
 fun parsingError(str: String): Nothing {
