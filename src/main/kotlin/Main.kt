@@ -70,7 +70,7 @@ fun main(args: Array<String>) {
         "L" -> Replacement.L
         "F" -> Replacement.F
         else -> {
-            println("Error: subst($subst) must be a valid options (LRU, F or R")
+            println("Error: subst($subst) must be a valid option (LRU, F or R)")
             exitProcess(1)
         }
     }
@@ -185,11 +185,11 @@ fun main(args: Array<String>) {
                             // and use it as index for cache_tag, then replace it treating the fault.
                             // Right away we remove the last element and put it in the front
                             // so the queue always has the same size
-                            val lruColumnIdx = queues[index].removeLast()
-                            val lruIdx = begin + lruColumnIdx
-                            cache_tag[lruIdx] = tag
-                            cache_val[lruIdx] = true
-                            queues[index].addFirst(lruColumnIdx)
+                            val columnIdx = queues[index].removeLast()
+                            val globalIdx = begin + columnIdx
+                            cache_tag[globalIdx] = tag
+                            cache_val[globalIdx] = true
+                            queues[index].addFirst(columnIdx)
                         }
                     }
                 }
